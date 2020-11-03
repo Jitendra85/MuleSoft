@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:munit="http://www.mulesoft.org/schema/mule/munit" xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xsi:schemaLocation="
+		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+		http://www.mulesoft.org/schema/mule/munit-tools  http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+	<munit:config name="graphql-mule-demo-test-suite.xml" />
+	<munit:test name="graphql-mule-demo-test-suite-graphql:userTest" description="Test" doc:id="ad8b5252-1b36-4bdc-8e98-7ae0a56ba96c" >
+		<munit:execution >
+			<flow-ref doc:name="Flow-ref to graphql:user" doc:id="cf4a053b-d70d-4169-9c33-ac845e982dca" name="graphql:user"/>
+		</munit:execution>
+	</munit:test>
+
+
+</mule>

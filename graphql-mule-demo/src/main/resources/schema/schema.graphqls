@@ -1,0 +1,32 @@
+schema {
+	query: Query
+}
+
+type Query{
+	user(
+        id : String
+    ): User   
+}
+
+type User {
+	name: String
+	username: String
+	email: String
+	address: String
+	phone: String
+	website: String
+	company: String
+	posts: [Post]
+	albums: [Album]
+}
+
+type Post {
+	title: String
+	id: String
+	body: String
+}
+
+type Album {
+	id: String
+	album: String
+}

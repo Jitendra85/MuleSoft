@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:core="http://www.mulesoft.org/schema/mule/core"
+	xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:graphql="http://www.mulesoft.org/schema/mule/graphql"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd 
+	http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd 
+	http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+	http://www.mulesoft.org/schema/mule/graphql http://www.mulesoft.org/schema/mule/graphql/current/mule-graphql.xsd
+	http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd">
+
+	<http:listener-config name="api-httpListenerConfig">
+		<http:listener-connection host="${http.host}"
+			port="${http.port}">
+		</http:listener-connection>
+	</http:listener-config>
+
+	<graphql:config name="graphql-config" configName="mygraphql"
+		schemaLocation="schema/schema.graphqls" />
+
+	<http:request-config name="HTTP_Request_configuration"
+		doc:name="HTTP Request configuration" doc:id="f0816d26-df61-4bc0-beb2-28db339c6d23">
+		<http:request-connection host="localhost" port="8081" />
+	</http:request-config>
+	<http:request-config name="HTTP_Request_configuration1" doc:name="HTTP Request configuration" doc:id="83d9bfdc-10a0-4d71-871d-f33586a1ad36" responseTimeout="30000000">
+		<http:request-connection host="sys-graphql-users.us-e2.cloudhub.io" connectionIdleTimeout="3000000"/>
+	</http:request-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="bad7b39e-0472-46fe-a4ed-a70c260c558f" file="properties.yaml" />
+	
+	<flow name="console">
+		<http:listener config-ref="api-httpListenerConfig" path="/graphiql" />
+		<parse-template location="index.html" doc:name="Parse Template" />
+		<set-payload value="#[payload]" mimeType="text/html" />
+	</flow>
+	<flow name="graphql">
+		<http:listener config-ref="api-httpListenerConfig" path="/graphql" />
+		<graphql:router config-ref="graphql-config" payload="#[payload]" />
+		<logger level="INFO" doc:name="Logger" doc:id="bcb096c5-6b17-48c1-b49e-6f0abb20934d" message="proxy test logger"/>
+	
+</flow>
+
+	<flow name="graphql:user">
+		<graphql:graphql-field-resolver
+			config-ref="graphql-config" fieldName="user" />
+
+		<scripting:execute engine="groovy" doc:name="Store GQL data">
+			<scripting:code>
+				payload = ['params' : attributes.getArguments(),
+				'fields' : attributes.getFields()]
+			</scripting:code>
+		</scripting:execute>
+		<http:request method="GET" doc:name="Request" doc:id="6a4551bd-010e-44e6-9230-589cdc6f06b7" config-ref="HTTP_Request_configuration" path="/api/graphql/users/{userid}">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"userid" : payload.params.id
+}]]]></http:uri-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="4134264e-86f1-4f45-883c-21d1544aaaff" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="7eac7bbe-fb60-4c46-af9a-1e16a504caa0" message="proxy test"/>
+
+		<!-- Do query etc. if no field resolver needed it will just find it in 
+			the payload. obviously needs to match field names exactly etc. -->
+	
+</flow>
+
+	<flow name="graphql:posts">
+		<graphql:graphql-field-resolver
+			config-ref="graphql-config" fieldName="posts" />
+			
+		<scripting:execute engine="groovy" doc:name="Store GQL data">
+			<scripting:code>
+				payload = ['params' : attributes.getArguments(),
+				'fields' : attributes.getFields(),
+				'source' : attributes.getSource()]
+			</scripting:code>
+		</scripting:execute>
+		<http:request method="GET" doc:name="Request" doc:id="ba106ea2-2a8b-494d-8011-55b8dde2d1ba" config-ref="HTTP_Request_configuration" path="/api/graphql/users/{userid}/posts">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"userid" : payload.source.id
+}]]]></http:uri-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="64ab6106-8b13-4574-b5a4-997a1028f122" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="7f6240d0-9adf-451a-b092-925dce7734d0" message="proxy test"/>
+	
+</flow>
+
+<flow name="graphql:albums">
+		<graphql:graphql-field-resolver
+			config-ref="graphql-config" fieldName="albums" />
+			
+		<scripting:execute engine="groovy" doc:name="Store GQL data">
+			<scripting:code>
+				payload = ['params' : attributes.getArguments(),
+				'fields' : attributes.getFields(),
+				'source' : attributes.getSource()]
+			</scripting:code>
+		</scripting:execute>
+		<http:request method="GET" doc:name="Request" doc:id="e2681011-be3c-4911-8ea9-27589873c64d" config-ref="HTTP_Request_configuration" path="/api/graphql/users/{userid}/albums">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"userid" : payload.source.id
+}]]]></http:uri-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="49550c35-559b-4456-911d-c2ab66d81b4d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="c3b88e10-bf4c-4aad-a2b3-6c5b4826a87c" message="proxy test"/>
+	
+</flow>
+	
+
+
+</mule>
