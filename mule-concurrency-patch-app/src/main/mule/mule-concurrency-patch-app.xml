@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="ffc44aa5-11de-470d-a2d0-0a0886cc6557" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<file:config name="File_Config" doc:name="File Config" doc:id="6f86eac8-1c7e-4efd-8144-3de35927bdee" >
+		<file:connection workingDir="C:\Users\jbafna\AnypointStudio\studio-workspace\mule-concurrency-solution\src\main\resources\accounts\" />
+	</file:config>
+	<flow name="get-account-flow" doc:id="48672a82-6340-4ed5-b1be-6775327aa867" >
+		<http:listener doc:name="Get Accounts" doc:id="6702775d-27fc-46ed-8413-e8a098b913ff" config-ref="HTTP_Listener_config" path="/api/v1.0/accounts/{accountId}" allowedMethods="GET">
+			<http:response>
+				<http:headers ><![CDATA[#[output application/java
+---
+{
+	ETag : vars.vETag
+}]]]></http:headers>
+			</http:response>
+			<http:error-response statusCode="#[vars.httpStatusCode default 500]">
+				<http:body ><![CDATA[#[payload]]]></http:body>
+			</http:error-response>
+		</http:listener>
+		<set-variable value="#[attributes.uriParams.accountId]" doc:name="Set Account Id" doc:id="7e1ddb33-449a-4fed-b53a-2dcc6c4dee69" variableName="vAccountId"/>
+		<flow-ref doc:name="Call read-account-subflow" doc:id="0d79bea7-c7d1-484c-ba3a-f8c546c5d7b1" name="read-account-subflow"/>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="500 - Internal Server Error " doc:id="108bda6c-0dcb-48f2-bccc-62d472454bb8" >
+				<ee:transform doc:name="Prepare Error Message" doc:id="df296c4c-d8f2-4644-a7f9-2a05cfbc2994" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: error.description,
+	errorType:error.errorType
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="httpStatusCode" ><![CDATA[500]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	
+	</flow>
+	<flow name="patch-account-flow" doc:id="c13e9021-ca26-4010-b8bd-efca5a8386cc" >
+		<http:listener doc:name="Patch Accounts" doc:id="be4a79ae-9aca-43db-a8e9-66cfa8b8f66e" config-ref="HTTP_Listener_config" allowedMethods="PATCH" path="/api/v1.0/accounts/{accountId}">
+			<http:response >
+				<http:headers ><![CDATA[#[output application/java
+---
+{
+	ETag : vars.vETag
+}]]]></http:headers>
+			</http:response>
+			<http:error-response statusCode="#[vars.httpStatusCode default 500]" >
+				<http:body ><![CDATA[#[payload]]]></http:body>
+			</http:error-response>
+		</http:listener>
+		<ee:transform doc:name="Set Variables AccountId, IF Match and Payload" doc:id="2579edec-ad70-4d82-9f01-2fe1809c6947" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="vInitialPayload" ><![CDATA[payload]]></ee:set-variable>
+				<ee:set-variable variableName="vAccountId" ><![CDATA[attributes.uriParams.accountId]]></ee:set-variable>
+				<ee:set-variable variableName="vIFMatch" ><![CDATA[attributes.headers['If-Match']]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<flow-ref doc:name="Call read-account-subflow" doc:id="be3ac405-1785-421e-bdb2-0ec098c32e4e" name="read-account-subflow"/>
+		<choice doc:name="Compare ETag and IF Match Headers" doc:id="5ac14c5c-d489-4be7-87fa-5a59d6855858" >
+			<when expression="#[vars.vIFMatch == vars.vETag]">
+				<file:write doc:name="Overwrite to File" doc:id="82366f8c-1fbf-4f92-8abf-1f0249e98d1e" config-ref="File_Config" path='#[vars.vAccountId ++ ".json"]'>
+					<file:content ><![CDATA[#[vars.vInitialPayload]]]></file:content>
+				</file:write>
+			</when>
+			<otherwise >
+				<raise-error doc:name="Raised Unprocessed Entity" doc:id="4d09e6e0-ac23-4715-8cab-cf5258f00cf9" type="CUSTOM:PRECONDITION_FAILED"/>
+			</otherwise>
+		</choice>
+		<flow-ref doc:name="Call read-account-subflow" doc:id="7205dac8-5aab-4ce8-9e53-c5e426f9a073" name="read-account-subflow"/>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="412 - Precondition Failed" doc:id="0743a28c-fc7c-4798-88fc-d8573f498d7c" type="CUSTOM:PRECONDITION_FAILED">
+				<ee:transform doc:name="Prepare Error Message" doc:id="7c2eb651-7b3f-4b8e-8d61-b4ec09cce750" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: error.description,
+	errorType:error.errorType
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="httpStatusCode" ><![CDATA[412]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="500 - Internal Server Error" doc:id="42e7b465-dc36-4f77-8259-5f0cb35cfb82" type="ANY">
+				<ee:transform doc:name="Prepare Error Message" doc:id="c9887e88-0bfd-42cb-9ba5-aafe2456aa01" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	error: error.description,
+	errorType:error.errorType
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="httpStatusCode" ><![CDATA[500]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+	<sub-flow name="read-account-subflow" doc:id="628289a6-a538-4308-bf06-d09c6016c78c" >
+		<file:read doc:name="Read Account" doc:id="55f3daac-0d36-4c49-a227-b3ca4a0541cf" config-ref="File_Config" path='#[vars.vAccountId ++ ".json"]' />
+		<set-variable value='#[%dw 2.0
+output application/json
+import * from dw::core::Binaries
+var myBinary = write(payload, "application/json")
+
+---
+toBase64(myBinary)]' doc:name="Hash Payload and Set ETag" doc:id="bce31868-4c59-4727-aeac-ac07b924298a" variableName="vETag" />
+		<logger level="INFO" doc:name="Log Payload Hash" doc:id="d0343253-f596-4af6-8103-24fb51f97ee3" message="#[vars.vETag]"/>
+	</sub-flow>
+</mule>
